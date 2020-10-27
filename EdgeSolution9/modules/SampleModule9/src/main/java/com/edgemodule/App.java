@@ -14,12 +14,10 @@ import io.nats.client.Subscription;
 public class App {
     private static MessageCallbackMqtt msgCallback = new MessageCallbackMqtt();
     private static EventCallback eventCallback = new EventCallback();
-    //private static final String INPUT_NAME = "input1";
     private static final String OUTPUT_NAME = "output1";
     public static String msgNats;
     public static Message msgMS;
     public static IotHubClientProtocol protocol;
-    public static DeviceClient dclient;
     public static ModuleClient client;
 	public static String connString = "HostName=NatsIothub123.azure-devices.net;SharedAccessKeyName=iothubowner;SharedAccessKey=oI52BbMlDj9I2JsFQcUVjYatHNySPO82lqJXM64d9fQ=";
 
@@ -84,19 +82,21 @@ public class App {
             Connection nc;
 
             try {
-
+                // Connect and Subscribe to Nats server
                 nc = Nats.connect(server);
                 Subscription sub = nc.subscribe("Schaeffler");
+                //print on nats by publishing it to subject 'yuri'
                 nc.publish("yuri", "Subscribed to Nats99".getBytes(StandardCharsets.UTF_8));
 
                 try {
+                    //Connect to IoT Hub
                     client.setMessageCallback(msgCallback, client);
                     client.registerConnectionStatusChangeCallback(new ConnectionStatusChangeCallback(), null);
                     client.open();
-                    // dclient = new DeviceClient(connString, protocol);
-                    // dclient.open();
+                    //print on nats by publishing it to subject 'yuri'
                     nc.publish("yuri", "Connected to IoT Hub".getBytes(StandardCharsets.UTF_8));
                 } catch (IllegalArgumentException | IOException e) {
+                    //if error print on nats by publishing it to subject 'yuri'
                     nc.publish("yuri", "Connection error".getBytes(StandardCharsets.UTF_8));
                     e.printStackTrace();
                 }
@@ -104,17 +104,23 @@ public class App {
                 
 
                 while (true){
+                    //print on nats by publishing it to subject 'yuri'
                     nc.publish("yuri", "reading msg".getBytes(StandardCharsets.UTF_8));
+                    //receive msg
                     io.nats.client.Message msg = sub.nextMessage(Duration.ZERO);
+                    //convert msg to string
                     msgNats = new String(msg.getData(), StandardCharsets.UTF_8);
+                    //print on terminal
                     System.out.println("msg received by NATS : "+msgNats);
+                    //print on nats by publishing it to subject 'yuri'
                     nc.publish("yuri", msgNats.getBytes(StandardCharsets.UTF_8));
+                    //cast msg to Messsage
                     msgMS = new Message(msgNats);
-                    
+                    //pushing data to the App.OUTPUT_NAME which will eventually be sent to IoT Hub
                     client.sendEventAsync(msgMS, eventCallback, msgMS, App.OUTPUT_NAME);
+                    //print on nats by publishing it to subject 'yuri'
                     nc.publish("yuri", "SENT".getBytes(StandardCharsets.UTF_8));
-                    Thread mthread = new Thread(new MessageSender());
-                    mthread.start();
+                    
                 }
             } catch (IOException | InterruptedException e) {
                 e.printStackTrace();
@@ -122,35 +128,13 @@ public class App {
         }
     }
 
-    protected static class MessageSender implements Runnable {
-		public void run() {
-			try {
-                
-                
-
-				Object lockobj = new Object();
-
-				// Send the message.
-				// EventCallback callback = new EventCallback();
-				// dclient.sendEventAsync(msgMS, eventCallback, lockobj);
-
-				synchronized (lockobj) {
-					lockobj.wait();
-				}
-			} catch (InterruptedException e) {
-				System.out.println("Finished.");
-			}
-	    }
-	}
+    
 
     public static void main(String[] args) {
         try {
-            
             protocol = IotHubClientProtocol.MQTT;
             System.out.println("Start to create client with MQTT protocol");
             client = ModuleClient.createFromEnvironment(protocol);
-
-            
 
             Thread thread = new Thread(new NatsSubscriptionRunnable());
             thread.start();
